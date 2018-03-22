@@ -1,0 +1,4 @@
+enable C4005: '_LIB': macro redefinition in sysdep.h and external.h
+#define _FILE_OFFSET_BITS 64
+#define SELECT_VECS NULL in targmatch.h and targets.c
+/* Always support S-records, for convenience.  */
