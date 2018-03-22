@@ -14,7 +14,7 @@
 #pragma warning(disable:4267) //C4267: 'function' : conversion from 'size_t' to 'bfd_size_type', possible loss of data
 #pragma warning(disable:4996) //C4996: 'fdopen' : The POSIX name for this item is deprecated.
 #pragma warning(disable:4090) //C4090: 'function' : different 'const' qualifiers
-#pragma warning(disable:4005) //C4005: 'offsetof' : macro redefinition
+//#pragma warning(disable:4005) //C4005: 'offsetof' : macro redefinition
 /* Define to 1 if you have the <alloca.h> header file. */
 //!!! #define HAVE_ALLOCA_H 1
 

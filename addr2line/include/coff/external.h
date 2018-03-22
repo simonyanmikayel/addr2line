@@ -94,7 +94,7 @@ struct external_scnhdr
 
 /* Names of "special" sections.  */
 
-#pragma warning(disable:4005) //C4005: '_LIB' : macro redefinition
+//#pragma warning(disable:4005) //C4005: '_LIB' : macro redefinition
 #pragma warning(disable:4146) //C4146: unary minus operator applied to unsigned type, result still unsigned
 #pragma warning(disable:4293) //C4293: '<<' : shift count negative or too big, undefined behavior
 #pragma warning(disable:4244) //C4244: 'return': conversion from 'unsigned __int64' to 'bfd_vma', possible loss of data
