@@ -37,6 +37,7 @@
 #include "demangle.h"
 #include "bucomm.h"
 #include "elf-bfd.h"
+#include "d:\work\_Repos\Profiler\Profiler\stdlog.h"
 
 static bfd_boolean unwind_inlines;	/* -i, unwind inlined functions. */
 static bfd_boolean with_addresses;	/* -a, show addresses.  */
@@ -170,6 +171,8 @@ find_address_in_section (bfd *abfd, asection *section,
   bfd_vma vma;
   bfd_size_type size;
 
+  stdlog("found: %d Section: %s\n", found, bfd_get_section_name(abfd, section));
+
   if (found)
     return;
 
@@ -187,6 +190,9 @@ find_address_in_section (bfd *abfd, asection *section,
   found = bfd_find_nearest_line_discriminator (abfd, section, syms, pc - vma,
                                                &filename, &functionname,
                                                &line, &discriminator);
+  if (found) {
+	  stdlog("found !!!: %d\n", found );
+  }
 }
 
 /* Look for an offset in a section.  This is directly called.  */
@@ -237,7 +243,7 @@ translate_addresses (bfd *abfd, asection *section)
 	  pc = bfd_scan_vma (*addr++, NULL, 16);
 	}
 
-      if (bfd_get_flavour (abfd) == bfd_target_elf_flavour)
+  if (bfd_get_flavour (abfd) == bfd_target_elf_flavour)
 	{
 	  const struct elf_backend_data *bed = get_elf_backend_data (abfd);
 	  bfd_vma sign = (bfd_vma) 1 << (bed->s->arch_size - 1);

@@ -14239,7 +14239,6 @@ arm_elf_find_function (bfd *         abfd ATTRIBUTE_UNUSED,
   return TRUE;
 }
 
-
 /* Find the nearest line to a particular section and offset, for error
    reporting.   This code is a duplicate of the code in elf.c, except
    that it uses arm_elf_find_function.  */
