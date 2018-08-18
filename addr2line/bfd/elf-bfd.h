@@ -2011,6 +2011,8 @@ extern alent *_bfd_elf_get_lineno
   (bfd *, asymbol *);
 extern bfd_boolean _bfd_elf_set_arch_mach
   (bfd *, enum bfd_architecture, unsigned long);
+extern bfd_boolean _bfd_elf_enum_addresses
+  (bfd *, asection *);
 extern bfd_boolean _bfd_elf_find_nearest_line
   (bfd *, asymbol **, asection *, bfd_vma,
    const char **, const char **, unsigned int *, unsigned int *);

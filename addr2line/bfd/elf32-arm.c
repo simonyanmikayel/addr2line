@@ -14240,6 +14240,20 @@ arm_elf_find_function (bfd *         abfd ATTRIBUTE_UNUSED,
 }
 
 /* Find the nearest line to a particular section and offset, for error
+reporting.   This code is a duplicate of the code in elf.c, except
+that it uses arm_elf_find_function.  */
+
+static bfd_boolean
+elf32_arm_enum_addresses(bfd *          abfd,
+	asection *     section)
+{
+
+  _bfd_dwarf2_enum_addresses(abfd, section, dwarf_debug_sections, &elf_tdata(abfd)->dwarf2_find_line_info);
+
+  return TRUE;
+}
+
+/* Find the nearest line to a particular section and offset, for error
    reporting.   This code is a duplicate of the code in elf.c, except
    that it uses arm_elf_find_function.  */
 
@@ -18365,6 +18379,7 @@ elf32_arm_backend_symbol_processing (bfd *abfd, asymbol *sym)
 #define bfd_elf32_bfd_link_hash_table_create    elf32_arm_link_hash_table_create
 #define bfd_elf32_bfd_reloc_type_lookup		elf32_arm_reloc_type_lookup
 #define bfd_elf32_bfd_reloc_name_lookup		elf32_arm_reloc_name_lookup
+#define bfd_elf32_enum_addresses	        elf32_arm_enum_addresses
 #define bfd_elf32_find_nearest_line	        elf32_arm_find_nearest_line
 #define bfd_elf32_find_inliner_info	        elf32_arm_find_inliner_info
 #define bfd_elf32_new_section_hook		elf32_arm_new_section_hook

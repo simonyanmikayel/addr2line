@@ -432,6 +432,9 @@ extern bfd_boolean _bfd_vms_lib_ia64_mkarchive (bfd *abfd);
   ((bfd_boolean (*) (bfd *, asymbol *)) bfd_false)
 #define _bfd_nosymbols_get_lineno \
   ((alent *(*) (bfd *, asymbol *)) bfd_nullvoidptr)
+#define _bfd_nosymbols_enum_addresses \
+  ((bfd_boolean (*) (bfd *, asection *))					\
+   bfd_false)
 #define _bfd_nosymbols_find_nearest_line \
   ((bfd_boolean (*) (bfd *, asymbol **, asection *, bfd_vma,		\
 		     const char **, const char **, unsigned int *,	\
@@ -574,6 +577,10 @@ struct dwarf_debug_section
    is terminated by NULL uncompressed_name.  */
 
 extern const struct dwarf_debug_section dwarf_debug_sections[];
+
+/* Enum symbols using DWARF 2 debugging information.  */
+extern bfd_boolean _bfd_dwarf2_enum_addresses
+(bfd *, asection *, const struct dwarf_debug_section *, void **);
 
 /* Find the nearest line using DWARF 2 debugging information.  */
 extern bfd_boolean _bfd_dwarf2_find_nearest_line

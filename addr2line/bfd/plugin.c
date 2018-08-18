@@ -84,6 +84,7 @@ dlerror (void)
 #define bfd_plugin_bfd_is_local_label_name            _bfd_nosymbols_bfd_is_local_label_name
 #define bfd_plugin_bfd_is_target_special_symbol       ((bfd_boolean (*) (bfd *, asymbol *)) bfd_false)
 #define bfd_plugin_get_lineno                         _bfd_nosymbols_get_lineno
+#define bfd_plugin_enum_addresses                     _bfd_nosymbols_enum_addresses
 #define bfd_plugin_find_nearest_line                  _bfd_nosymbols_find_nearest_line
 #define bfd_plugin_find_line                          _bfd_nosymbols_find_line
 #define bfd_plugin_find_inliner_info                  _bfd_nosymbols_find_inliner_info

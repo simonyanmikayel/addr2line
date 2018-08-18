@@ -205,6 +205,7 @@ binary_get_symbol_info (bfd *ignore_abfd ATTRIBUTE_UNUSED,
 
 #define binary_bfd_is_local_label_name      bfd_generic_is_local_label_name
 #define binary_get_lineno                  _bfd_nosymbols_get_lineno
+#define binary_enum_addresses              _bfd_nosymbols_enum_addresses
 #define binary_find_nearest_line           _bfd_nosymbols_find_nearest_line
 #define binary_find_line                   _bfd_nosymbols_find_line
 #define binary_find_inliner_info           _bfd_nosymbols_find_inliner_info

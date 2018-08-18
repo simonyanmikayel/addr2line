@@ -3850,6 +3850,613 @@ _bfd_dwarf2_find_symbol_bias (asymbol ** symbols, void ** pinfo)
   return 0;
 }
 
+static bfd_boolean
+enum_address_in_line_info_table(bfd *abfd, struct comp_unit* unit, struct dwarf2_debug *stash, bfd_boolean trace)
+{
+  bfd_boolean ret = TRUE;
+  //bfd *abfd = unit->abfd;
+  struct line_info_table* table = NULL;
+  bfd_byte *line_ptr;
+  bfd_byte *line_end;
+  struct line_head lh;
+  unsigned int i, bytes_read, offset_size;
+  char *cur_file, *cur_dir;
+  unsigned char op_code, extended_op, adj_opcode;
+  unsigned int exop_len;
+  bfd_size_type amt;
+
+  if (!read_section(abfd, &stash->debug_sections[debug_line],
+    stash->syms, unit->line_offset,
+    &stash->dwarf_line_buffer, &stash->dwarf_line_size))
+  {
+    goto fail;
+  }
+
+  amt = sizeof(struct line_info_table);
+  table = (struct line_info_table *) bfd_alloc(abfd, amt);
+  if (table == NULL)
+  {
+    goto fail;
+  }
+  table->abfd = abfd;
+  table->comp_dir = unit->comp_dir;
+
+  table->num_files = 0;
+  table->files = NULL;
+
+  table->num_dirs = 0;
+  table->dirs = NULL;
+
+  table->num_sequences = 0;
+  table->sequences = NULL;
+
+  table->lcl_head = NULL;
+
+  if (stash->dwarf_line_size < 16)
+  {
+    (*_bfd_error_handler)
+      (_("Dwarf Error: Line info section is too small (%ld)"),
+      (long)stash->dwarf_line_size);
+    bfd_set_error(bfd_error_bad_value);
+    goto fail;
+  }
+  line_ptr = stash->dwarf_line_buffer + unit->line_offset;
+  line_end = stash->dwarf_line_buffer + stash->dwarf_line_size;
+
+  /* Read in the prologue.  */
+  lh.total_length = read_4_bytes(abfd, line_ptr, line_end);
+  line_ptr += 4;
+  offset_size = 4;
+  if (lh.total_length == 0xffffffff)
+  {
+    lh.total_length = read_8_bytes(abfd, line_ptr, line_end);
+    line_ptr += 8;
+    offset_size = 8;
+  }
+  else if (lh.total_length == 0 && unit->addr_size == 8)
+  {
+    /* Handle (non-standard) 64-bit DWARF2 formats.  */
+    lh.total_length = read_4_bytes(abfd, line_ptr, line_end);
+    line_ptr += 4;
+    offset_size = 8;
+  }
+
+  if (lh.total_length > stash->dwarf_line_size)
+  {
+    (*_bfd_error_handler)
+      (_("Dwarf Error: Line info data is bigger (0x%lx) than the section (0x%lx)"),
+      (long)lh.total_length, (long)stash->dwarf_line_size);
+    bfd_set_error(bfd_error_bad_value);
+    goto fail;
+  }
+
+  line_end = line_ptr + lh.total_length;
+
+  lh.version = read_2_bytes(abfd, line_ptr, line_end);
+  if (lh.version < 2 || lh.version > 4)
+  {
+    (*_bfd_error_handler)
+      (_("Dwarf Error: Unhandled .debug_line version %d."), lh.version);
+    bfd_set_error(bfd_error_bad_value);
+    goto fail;
+  }
+  line_ptr += 2;
+
+  if (line_ptr + offset_size + (lh.version >= 4 ? 6 : 5) >= line_end)
+  {
+    (*_bfd_error_handler)
+      (_("Dwarf Error: Ran out of room reading prologue"));
+    bfd_set_error(bfd_error_bad_value);
+    goto fail;
+  }
+
+  if (offset_size == 4)
+    lh.prologue_length = read_4_bytes(abfd, line_ptr, line_end);
+  else
+    lh.prologue_length = read_8_bytes(abfd, line_ptr, line_end);
+  line_ptr += offset_size;
+
+  lh.minimum_instruction_length = read_1_byte(abfd, line_ptr, line_end);
+  line_ptr += 1;
+
+  if (lh.version >= 4)
+  {
+    lh.maximum_ops_per_insn = read_1_byte(abfd, line_ptr, line_end);
+    line_ptr += 1;
+  }
+  else
+    lh.maximum_ops_per_insn = 1;
+
+  if (lh.maximum_ops_per_insn == 0)
+  {
+    (*_bfd_error_handler)
+      (_("Dwarf Error: Invalid maximum operations per instruction."));
+    bfd_set_error(bfd_error_bad_value);
+    goto fail;
+  }
+
+  lh.default_is_stmt = read_1_byte(abfd, line_ptr, line_end);
+  line_ptr += 1;
+
+  lh.line_base = read_1_signed_byte(abfd, line_ptr, line_end);
+  line_ptr += 1;
+
+  lh.line_range = read_1_byte(abfd, line_ptr, line_end);
+  line_ptr += 1;
+
+  lh.opcode_base = read_1_byte(abfd, line_ptr, line_end);
+  line_ptr += 1;
+
+  if (line_ptr + (lh.opcode_base - 1) >= line_end)
+  {
+    (*_bfd_error_handler) (_("Dwarf Error: Ran out of room reading opcodes"));
+    bfd_set_error(bfd_error_bad_value);
+    goto fail;
+  }
+
+  amt = lh.opcode_base * sizeof(unsigned char);
+  lh.standard_opcode_lengths = (unsigned char *)bfd_alloc(abfd, amt);
+
+  lh.standard_opcode_lengths[0] = 1;
+
+  for (i = 1; i < lh.opcode_base; ++i)
+  {
+    lh.standard_opcode_lengths[i] = read_1_byte(abfd, line_ptr, line_end);
+    line_ptr += 1;
+  }
+
+  /* Read directory table.  */
+  while ((cur_dir = read_string(abfd, line_ptr, line_end, &bytes_read)) != NULL)
+  {
+    line_ptr += bytes_read;
+
+    if ((table->num_dirs % DIR_ALLOC_CHUNK) == 0)
+    {
+      char **tmp;
+
+      amt = table->num_dirs + DIR_ALLOC_CHUNK;
+      amt *= sizeof(char *);
+
+      tmp = (char **)bfd_realloc(table->dirs, amt);
+      if (tmp == NULL)
+        goto fail;
+      table->dirs = tmp;
+    }
+
+    table->dirs[table->num_dirs++] = cur_dir;
+  }
+
+  line_ptr += bytes_read;
+
+  /* Read file name table.  */
+  while ((cur_file = read_string(abfd, line_ptr, line_end, &bytes_read)) != NULL)
+  {
+    line_ptr += bytes_read;
+
+    if ((table->num_files % FILE_ALLOC_CHUNK) == 0)
+    {
+      struct fileinfo *tmp;
+
+      amt = table->num_files + FILE_ALLOC_CHUNK;
+      amt *= sizeof(struct fileinfo);
+
+      tmp = (struct fileinfo *) bfd_realloc(table->files, amt);
+      if (tmp == NULL)
+        goto fail;
+      table->files = tmp;
+    }
+
+    table->files[table->num_files].name = cur_file;
+    table->files[table->num_files].dir =
+      safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+    line_ptr += bytes_read;
+    table->files[table->num_files].time = safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+    line_ptr += bytes_read;
+    table->files[table->num_files].size = safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+    line_ptr += bytes_read;
+    table->num_files++;
+  }
+
+  line_ptr += bytes_read;
+
+  /* Read the statement sequences until there's nothing left.  */
+  while (line_ptr < line_end)
+  {
+    /* State machine registers.  */
+    bfd_vma address = 0;
+    unsigned char op_index = 0;
+    char * filename = table->num_files ? concat_filename(table, 1) : NULL;
+    unsigned int line = 1;
+    unsigned int column = 0;
+    unsigned int discriminator = 0;
+    int is_stmt = lh.default_is_stmt;
+    int end_sequence = 0;
+    /* eraxxon@alumni.rice.edu: Against the DWARF2 specs, some
+    compilers generate address sequences that are wildly out of
+    order using DW_LNE_set_address (e.g. Intel C++ 6.0 compiler
+    for ia64-Linux).  Thus, to determine the low and high
+    address, we must compare on every DW_LNS_copy, etc.  */
+    bfd_vma low_pc = (bfd_vma)-1;
+    bfd_vma high_pc = 0;
+
+    /* Decode the table.  */
+    while (!end_sequence)
+    {
+      op_code = read_1_byte(abfd, line_ptr, line_end);
+      line_ptr += 1;
+
+      if (op_code >= lh.opcode_base)
+      {
+        /* Special operand.  */
+        adj_opcode = op_code - lh.opcode_base;
+        if (lh.line_range == 0)
+          goto line_fail;
+        if (lh.maximum_ops_per_insn == 1)
+          address += (adj_opcode / lh.line_range
+            * lh.minimum_instruction_length);
+        else
+        {
+          address += ((op_index + adj_opcode / lh.line_range)
+            / lh.maximum_ops_per_insn
+            * lh.minimum_instruction_length);
+          op_index = ((op_index + adj_opcode / lh.line_range)
+            % lh.maximum_ops_per_insn);
+        }
+        line += lh.line_base + (adj_opcode % lh.line_range);
+        /* Append row to matrix using current values.  */
+        if (!abfd->fn_line_info_cb(address, op_index, filename,
+          line, column, discriminator, 0))
+        {
+          ret = FALSE;
+          goto line_fail;
+        }
+        discriminator = 0;
+        if (address < low_pc)
+          low_pc = address;
+        if (address > high_pc)
+          high_pc = address;
+      }
+      else switch (op_code)
+      {
+      case DW_LNS_extended_op:
+        exop_len = safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+        line_ptr += bytes_read;
+        extended_op = read_1_byte(abfd, line_ptr, line_end);
+        line_ptr += 1;
+
+        switch (extended_op)
+        {
+        case DW_LNE_end_sequence:
+          end_sequence = 1;
+          if (!abfd->fn_line_info_cb(address, op_index, filename, line,
+            column, discriminator, end_sequence))
+          {
+            ret = FALSE;
+            goto line_fail;
+          }
+          discriminator = 0;
+          if (address < low_pc)
+            low_pc = address;
+          if (address > high_pc)
+            high_pc = address;
+          if (!arange_add(unit, &unit->arange, low_pc, high_pc))
+            goto line_fail;
+          break;
+        case DW_LNE_set_address:
+          address = read_address(unit, line_ptr, line_end);
+          op_index = 0;
+          line_ptr += unit->addr_size;
+          break;
+        case DW_LNE_define_file:
+          cur_file = read_string(abfd, line_ptr, line_end, &bytes_read);
+          line_ptr += bytes_read;
+          if ((table->num_files % FILE_ALLOC_CHUNK) == 0)
+          {
+            struct fileinfo *tmp;
+             
+            amt = table->num_files + FILE_ALLOC_CHUNK;
+            amt *= sizeof(struct fileinfo);
+            tmp = (struct fileinfo *) bfd_realloc(table->files, amt);
+            if (tmp == NULL)
+              goto line_fail;
+            table->files = tmp;
+          }
+          table->files[table->num_files].name = cur_file;
+          table->files[table->num_files].dir =
+            safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+          line_ptr += bytes_read;
+          table->files[table->num_files].time =
+            safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+          line_ptr += bytes_read;
+          table->files[table->num_files].size =
+            safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+          line_ptr += bytes_read;
+          table->num_files++;
+          break;
+        case DW_LNE_set_discriminator:
+          discriminator =
+            safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+          line_ptr += bytes_read;
+          break;
+        case DW_LNE_HP_source_file_correlation:
+          line_ptr += exop_len - 1;
+          break;
+        default:
+          (*_bfd_error_handler)
+            (_("Dwarf Error: mangled line number section."));
+          bfd_set_error(bfd_error_bad_value);
+        line_fail:
+          if (filename != NULL)
+            free(filename);
+          goto fail;
+        }
+        break;
+      case DW_LNS_copy:
+        if (!abfd->fn_line_info_cb(address, op_index,
+          filename, line, column, discriminator, 0))
+        {
+          ret = FALSE;
+          goto line_fail;
+        }
+        discriminator = 0;
+        if (address < low_pc)
+          low_pc = address;
+        if (address > high_pc)
+          high_pc = address;
+        break;
+      case DW_LNS_advance_pc:
+        if (lh.maximum_ops_per_insn == 1)
+          address += (lh.minimum_instruction_length
+            * safe_read_leb128(abfd, line_ptr, &bytes_read,
+              FALSE, line_end));
+        else
+        {
+          bfd_vma adjust = safe_read_leb128(abfd, line_ptr, &bytes_read,
+            FALSE, line_end);
+          address = ((op_index + adjust) / lh.maximum_ops_per_insn
+            * lh.minimum_instruction_length);
+          op_index = (op_index + adjust) % lh.maximum_ops_per_insn;
+        }
+        line_ptr += bytes_read;
+        break;
+      case DW_LNS_advance_line:
+        line += safe_read_leb128(abfd, line_ptr, &bytes_read, TRUE, line_end);
+        line_ptr += bytes_read;
+        break;
+      case DW_LNS_set_file:
+      {
+        unsigned int file;
+
+        /* The file and directory tables are 0
+        based, the references are 1 based.  */
+        file = safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+        line_ptr += bytes_read;
+        if (filename)
+          free(filename);
+        filename = concat_filename(table, file);
+        break;
+      }
+      case DW_LNS_set_column:
+        column = safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+        line_ptr += bytes_read;
+        break;
+      case DW_LNS_negate_stmt:
+        is_stmt = (!is_stmt);
+        break;
+      case DW_LNS_set_basic_block:
+        break;
+      case DW_LNS_const_add_pc:
+        if (lh.maximum_ops_per_insn == 1)
+          address += (lh.minimum_instruction_length
+            * ((255 - lh.opcode_base) / lh.line_range));
+        else
+        {
+          bfd_vma adjust = ((255 - lh.opcode_base) / lh.line_range);
+          address += (lh.minimum_instruction_length
+            * ((op_index + adjust)
+              / lh.maximum_ops_per_insn));
+          op_index = (op_index + adjust) % lh.maximum_ops_per_insn;
+        }
+        break;
+      case DW_LNS_fixed_advance_pc:
+        address += read_2_bytes(abfd, line_ptr, line_end);
+        op_index = 0;
+        line_ptr += 2;
+        break;
+      default:
+        /* Unknown standard opcode, ignore it.  */
+        for (i = 0; i < lh.standard_opcode_lengths[op_code]; i++)
+        {
+          (void)safe_read_leb128(abfd, line_ptr, &bytes_read, FALSE, line_end);
+          line_ptr += bytes_read;
+        }
+        break;
+      }
+    }
+
+    if (filename)
+      free(filename);
+  }
+
+fail:
+  if (table)
+  {
+    if (table->sequences != NULL)
+      free(table->sequences);
+    if (table->files != NULL)
+      free(table->files);
+    if (table->dirs != NULL)
+      free(table->dirs);
+  }
+
+  return ret;
+  /*
+  //add_line_info
+  if (!unit->line_table)
+  {
+  if (!unit->stmtlist)
+  {
+  unit->error = 1;
+  return FALSE;
+  }
+
+  unit->line_table = decode_line_info(unit, stash);
+
+  if (!unit->line_table)
+  {
+  unit->error = 1;
+  return FALSE;
+  }
+  }
+
+  struct line_info_table *table = unit->line_table;
+
+  struct line_sequence *seq = NULL;
+  struct line_info *each_line;
+
+  for (unsigned int i = 0; i < table->num_sequences; i++)
+  {
+  seq = &table->sequences[i];
+  if (seq)
+  {
+  for (each_line = seq->last_line; each_line; each_line = each_line->prev_line)
+  {
+    if (each_line
+      && !(each_line->end_sequence || each_line == seq->last_line))
+    {
+      char *filename_ptr = each_line->filename;
+      int linenumber = each_line->line;
+      int discriminator = each_line->discriminator;
+    }
+  }
+    }
+  }
+
+  */
+}
+
+bfd_boolean
+_bfd_dwarf2_enum_addresses(bfd *abfd,
+  asection *section,
+  const struct dwarf_debug_section *debug_sections,
+  void **pinfo)
+{
+  struct dwarf2_debug *stash;
+  struct comp_unit* each;
+
+  if (!_bfd_dwarf2_slurp_debug_info(abfd, NULL, debug_sections,
+    NULL, pinfo,
+    (abfd->flags & (EXEC_P | DYNAMIC)) == 0))
+    return FALSE;
+
+  stash = (struct dwarf2_debug *) *pinfo;
+
+  BFD_ASSERT(section != NULL);
+
+  /* A null info_ptr indicates that there is no dwarf2 info
+  (or that an error occured while setting up the stash).  */
+  if (!stash->info_ptr)
+    return FALSE;
+
+  stash->inliner_chain = NULL;
+
+  for (each = stash->all_comp_units; each; each = each->next_unit)
+  {
+    //func_p = lookup_address_in_function_table(unit, addr, function_ptr);
+    if (!enum_address_in_line_info_table(abfd, each, stash, TRUE))
+      return FALSE;
+  }
+
+  unsigned int addr_size = 4;
+
+  /* Read each remaining comp. units checking each as they are read.  */
+  while (stash->info_ptr < stash->info_ptr_end)
+  {
+    bfd_vma length;
+    unsigned int offset_size = addr_size;
+    bfd_byte *info_ptr_unit = stash->info_ptr;
+
+    length = read_4_bytes(stash->bfd_ptr, stash->info_ptr, stash->info_ptr_end);
+    /* A 0xffffff length is the DWARF3 way of indicating
+    we use 64-bit offsets, instead of 32-bit offsets.  */
+    if (length == 0xffffffff)
+    {
+      offset_size = 8;
+      length = read_8_bytes(stash->bfd_ptr, stash->info_ptr + 4, stash->info_ptr_end);
+      stash->info_ptr += 12;
+    }
+    /* A zero length is the IRIX way of indicating 64-bit offsets,
+    mostly because the 64-bit length will generally fit in 32
+    bits, and the endianness helps.  */
+    else if (length == 0)
+    {
+      offset_size = 8;
+      length = read_4_bytes(stash->bfd_ptr, stash->info_ptr + 4, stash->info_ptr_end);
+      stash->info_ptr += 8;
+    }
+    /* In the absence of the hints above, we assume 32-bit DWARF2
+    offsets even for targets with 64-bit addresses, because:
+    a) most of the time these targets will not have generated
+    more than 2Gb of debug info and so will not need 64-bit
+    offsets,
+    and
+    b) if they do use 64-bit offsets but they are not using
+    the size hints that are tested for above then they are
+    not conforming to the DWARF3 standard anyway.  */
+    else if (addr_size == 8)
+    {
+      offset_size = 4;
+      stash->info_ptr += 4;
+    }
+    else
+      stash->info_ptr += 4;
+
+    if (length > 0)
+    {
+      bfd_byte * new_ptr;
+
+      each = parse_comp_unit(stash, length, info_ptr_unit,
+        offset_size);
+      if (!each)
+        /* The dwarf information is damaged, don't trust it any
+        more.  */
+        break;
+
+      new_ptr = stash->info_ptr + length;
+      /* PR 17512: file: 1500698c.  */
+      if (new_ptr < stash->info_ptr)
+      {
+        /* A corrupt length value - do not trust the info any more.  */
+        break;
+      }
+      else
+        stash->info_ptr = new_ptr;
+
+      if (stash->all_comp_units)
+        stash->all_comp_units->prev_unit = each;
+      else
+        stash->last_comp_unit = each;
+
+      each->next_unit = stash->all_comp_units;
+      stash->all_comp_units = each;
+
+      //func_p = lookup_address_in_function_table(unit, addr, function_ptr);
+      if (!enum_address_in_line_info_table(abfd, each, stash, TRUE))
+        return FALSE;
+
+      if ((bfd_vma)(stash->info_ptr - stash->sec_info_ptr)
+        == stash->sec->size)
+      {
+        stash->sec = find_debug_info(stash->bfd_ptr, debug_sections,
+          stash->sec);
+        stash->sec_info_ptr = stash->info_ptr;
+      }
+    }
+  }
+
+  return TRUE;
+}
+
 /* Find the source code location of SYMBOL.  If SYMBOL is NULL
    then find the nearest source code location corresponding to
    the address SECTION + OFFSET.

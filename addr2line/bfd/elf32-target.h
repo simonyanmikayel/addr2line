@@ -46,6 +46,9 @@
 #ifndef bfd_elf32_canonicalize_reloc
 #define bfd_elf32_canonicalize_reloc	_bfd_elf_canonicalize_reloc
 #endif
+#ifndef bfd_elf32_enum_addresses
+#define bfd_elf32_enum_addresses	_bfd_elf_enum_addresses
+#endif
 #ifndef bfd_elf32_find_nearest_line
 #define bfd_elf32_find_nearest_line	_bfd_elf_find_nearest_line
 #endif

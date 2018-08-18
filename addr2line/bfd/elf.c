@@ -8393,6 +8393,15 @@ _bfd_elf_set_arch_mach (bfd *abfd,
   return bfd_default_set_arch_mach (abfd, arch, machine);
 }
 
+/* Enum addresses in section */
+
+bfd_boolean
+_bfd_elf_enum_addresses(bfd *abfd,
+  asection *section)
+{
+  return FALSE;
+}
+
 /* Find the nearest line to a particular section and offset,
    for error reporting.  */
 

@@ -6568,6 +6568,18 @@ struct bfd_build_id
     bfd_byte data[1];
   };
 
+#ifndef LINE_INFO_CB
+#define LINE_INFO_CB
+typedef int(*line_info_cb)(
+  unsigned long address,
+  unsigned char op_index,
+  char *filename,
+  unsigned int line,
+  unsigned int column,
+  unsigned int discriminator,
+  int end_sequence);
+#endif //LINE_INFO_CB
+
 struct bfd
 {
   /* The filename the application opened the BFD with.  */
@@ -6862,6 +6874,9 @@ struct bfd
 
   /* For input BFDs, the build ID, if the object has one. */
   const struct bfd_build_id *build_id;
+
+  /* terate on all sections and call fn_line_info_cb */
+  line_info_cb fn_line_info_cb;
 };
 
 /* See note beside bfd_set_section_userdata.  */
@@ -6970,6 +6985,10 @@ bfd_boolean bfd_set_private_flags (bfd *abfd, flagword flags);
      BFD_SEND (abfd, _bfd_set_private_flags, (abfd, flags))
 #define bfd_sizeof_headers(abfd, info) \
        BFD_SEND (abfd, _bfd_sizeof_headers, (abfd, info))
+
+#define bfd_enum_addresses(abfd, sec) \
+       BFD_SEND (abfd, _bfd_enum_addresses, \
+                 (abfd, sec))
 
 #define bfd_find_nearest_line(abfd, sec, syms, off, file, func, line) \
        BFD_SEND (abfd, _bfd_find_nearest_line, \
@@ -7357,6 +7376,7 @@ typedef struct bfd_target
   NAME##_bfd_is_local_label_name, \
   NAME##_bfd_is_target_special_symbol, \
   NAME##_get_lineno, \
+  NAME##_enum_addresses, \
   NAME##_find_nearest_line, \
   NAME##_find_line, \
   NAME##_find_inliner_info, \
@@ -7381,6 +7401,8 @@ typedef struct bfd_target
   bfd_boolean (*_bfd_is_local_label_name) (bfd *, const char *);
   bfd_boolean (*_bfd_is_target_special_symbol) (bfd *, asymbol *);
   alent *     (*_get_lineno) (bfd *, struct bfd_symbol *);
+  bfd_boolean(*_bfd_enum_addresses)
+	  (bfd *, struct bfd_section *);
   bfd_boolean (*_bfd_find_nearest_line)
     (bfd *, struct bfd_symbol **, struct bfd_section *, bfd_vma,
      const char **, const char **, unsigned int *, unsigned int *);
