@@ -8,10 +8,7 @@ typedef int(*line_info_cb)(
   char *filename,
   char* section_name,
   char* function_name,
-  unsigned int line,
-  unsigned int column,
-  unsigned int discriminator,
-  int end_sequence);
+  unsigned int line);
 #endif //LINE_INFO_CB
 
 #ifdef __cplusplus
@@ -20,6 +17,7 @@ extern "C" {
 #endif
     int resolve_addr(int argc, char **argv);
     int enum_file_addresses(const char *file_name, const char* section_name, line_info_cb cb);
+    void cleanup_publics();
 #ifdef __cplusplus
 }
 #endif

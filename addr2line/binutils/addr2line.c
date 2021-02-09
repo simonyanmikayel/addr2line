@@ -545,8 +545,32 @@ int resolve_addr(int argc, char** argv)
 	return ret;
 }
 
+void cleanup_publics()
+{
+	optind = 0; //we are reusing getopt_long
+	fn_line_info_cb = 0;
+	unwind_inlines = 0;
+	with_addresses = 0;
+	with_functions = 0;
+	do_demangle = 0;
+	pretty_print = 0;
+	base_names = 0;
+	naddr = 0;
+	addr = 0;
+	enum_file_name = 0;
+	syms = 0;
+	pc = 0;
+	filename = 0;
+	functionname = 0;
+	line = 0;
+	discriminator = 0;
+	found = 0;
+}
+
 int enum_file_addresses(const char* file_name, const char* section_name, line_info_cb cb)
 {
+	cleanup_publics();
+
 	int argc = section_name ? 5 : 3;
 	char* argv[5];
 	argv[0] = "dummy";
@@ -562,7 +586,25 @@ int enum_file_addresses(const char* file_name, const char* section_name, line_in
 	return resolve_addr(argc, argv);
 }
 
-//int main(int argc, char **argv)
-//{
-//    return resolve_addr(argc, argv);
-//}
+#ifdef _PROFILER
+static int count = 0;
+static int line_info(unsigned long address, unsigned char op_index, char* file_name, char* section_name, char* function_name, unsigned int line, unsigned int column, unsigned int discriminator, int end_sequence)
+{
+	count++;
+	//if (address == 0x4e014) 
+	{ //5b308 13B8C8 4e014
+		printf("%s:%d %s  %s\n", file_name, line, section_name ? section_name : "?", function_name ? function_name : "??");
+		address = address;
+	}
+	return 1;
+}
+
+int main(int argc, char **argv)
+{
+    //return resolve_addr(argc, argv);
+	count = 0;
+	enum_file_addresses("y:\\workspace\\samoa-MAPS\\services\\ssl\\ssl", ".text", line_info);
+	count = 0;
+	enum_file_addresses("y:\\workspace\\samoa-MAPS\\services\\ssl\\ssl", ".text", line_info);\
+}
+#endif //_PROFILER

@@ -3866,6 +3866,8 @@ enum_address_in_line_info_table(bfd* abfd, asection* section, struct comp_unit* 
 	unsigned int exop_len;
 	bfd_size_type amt;
 	struct funcinfo* function_ptr = 0;
+	char* fubction_name;
+	char* section_name;
 
 	if (!read_section(abfd, &stash->debug_sections[debug_line],
 		stash->syms, unit->line_offset,
@@ -4107,8 +4109,9 @@ enum_address_in_line_info_table(bfd* abfd, asection* section, struct comp_unit* 
 				line += lh.line_base + (adj_opcode % lh.line_range);
 				/* Append row to matrix using current values.  */
 				lookup_address_in_function_table(unit, address, &function_ptr);
-				if (!abfd->fn_line_info_cb(address, op_index, filename, section ? section->name : 0, function_ptr ? function_ptr->name : 0,
-					line, column, discriminator, 0))
+				fubction_name = function_ptr ? function_ptr->name : 0;
+				section_name = section ? section->name : 0;
+				if (!abfd->fn_line_info_cb(address, op_index, filename, section_name, fubction_name, line))
 				{
 					ret = FALSE;
 					goto line_fail;
@@ -4131,9 +4134,12 @@ enum_address_in_line_info_table(bfd* abfd, asection* section, struct comp_unit* 
 				{
 				case DW_LNE_end_sequence:
 					end_sequence = 1;
+					if (address == 0x4f8b8)
+						address = address;
 					lookup_address_in_function_table(unit, address, &function_ptr);
-					if (!abfd->fn_line_info_cb(address, op_index, filename, section ? section->name : 0, line, function_ptr ? function_ptr->name : 0,
-						column, discriminator, end_sequence))
+					fubction_name = function_ptr ? function_ptr->name : 0;
+					section_name = section ? section->name : 0;
+					if (!abfd->fn_line_info_cb(address, op_index, filename, section_name, fubction_name, line))
 					{
 						ret = FALSE;
 						goto line_fail;
@@ -4197,8 +4203,9 @@ enum_address_in_line_info_table(bfd* abfd, asection* section, struct comp_unit* 
 				break;
 			case DW_LNS_copy:
 				lookup_address_in_function_table(unit, address, &function_ptr);
-				if (!abfd->fn_line_info_cb(address, op_index, filename, section ? section->name : 0, function_ptr ? function_ptr->name : 0,
-					line, column, discriminator, 0))
+				fubction_name = function_ptr ? function_ptr->name : 0;
+				section_name = section ? section->name : 0;
+				if (!abfd->fn_line_info_cb(address, op_index, filename, section_name, fubction_name, line))
 				{
 					ret = FALSE;
 					goto line_fail;
